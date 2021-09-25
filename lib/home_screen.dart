@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:developer';
 import 'package:awesome_notifications/awesome_notifications.dart';
-import 'package:pusher_websocket_flutter/pusher.dart';
+import 'package:pusher_client/pusher_client.dart';
+// import 'package:pusher_websocket_flutter/pusher.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -11,25 +13,32 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  PusherClient pusher;
+  Channel channel;
   int curentIndex = 0;
   List<Widget> widgets = [Home(), Flights(), Hotels(), Cars()];
-  Future<void> _initPusher() async {
-    try {
-      Pusher.init('48382bce59b893f1efa5', PusherOptions(cluster: 'mt1'));
-    } on Exception catch (e) {
-      // ignore: avoid_print
-      print(e);
-    }
-    //Connect
-    Pusher.connect(onConnectionStateChange: (val) {
-      print(val.currentState);
-    }, onError: (err) {
-      print(err.message);
+  initPusher() {
+    pusher = PusherClient(
+      "48382bce59b893f1efa5",
+      PusherOptions(
+        cluster: 'mt1',
+        encrypted: false,
+      ),
+      enableLogging: true,
+    );
+    channel = pusher.subscribe("name_channel");
+    pusher.onConnectionStateChange((state) async {
+      log("previousState: ${state.previousState}, currentState: ${state.currentState}");
     });
-    Channel _channel = await Pusher.subscribe("name_channel");
-    _channel.bind("name_event", (event) async {
+    channel.bind('name_event', (event) async {
       dynamic data = json.decode(event.data);
       String message = data['message'];
+      AwesomeNotifications().isNotificationAllowed().then((isAllowed) {
+        if (!isAllowed) {
+          print("e");
+          AwesomeNotifications().requestPermissionToSendNotifications();
+        }
+      });
       await AwesomeNotifications().createNotification(
         content: NotificationContent(id: 8, channelKey: "key2", body: message),
         schedule: NotificationInterval(
@@ -42,7 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void initState() {
-    _initPusher();
+    initPusher();
     super.initState();
   }
 
